@@ -37,89 +37,89 @@ class Event:
             self.event_id = f"{self.event_type.value}_{self.timestamp.strftime('%Y%m%d_%H%M%S_%f')}"
 
 
-@dataclass
 class TickEvent(Event):
     """实时行情事件"""
-    symbol: str
-    price: float
-    volume: int
     
-    def __init__(self, symbol: str, price: float, volume: int, timestamp: datetime = None):
+    def __init__(self, stock_code: str, price: float, volume: int, timestamp: datetime = None):
         super().__init__(
             EventType.TICK,
             {
-                "symbol": symbol,
+                "stock_code": stock_code,
                 "price": price,
                 "volume": volume
             },
             timestamp or datetime.now()
         )
-        self.symbol = symbol
+        self.stock_code = stock_code
         self.price = price
         self.volume = volume
 
 
-@dataclass
 class BarEvent(Event):
-    """K线数据事件"""
-    symbol: str
-    bar_data: Dict[str, Any]
+    """K线数据事件 - 支持你的数据结构"""
     
-    def __init__(self, symbol: str, bar_data: Dict[str, Any], timestamp: datetime = None):
+    def __init__(self, stock_code: str, trade_date: str,
+                 open: float, close: float, high: float, low: float, volume: int,
+                 timestamp: datetime = None):
+        # 构建bar_data，支持你的数据结构
+        bar_data = {
+            "open": open,
+            "close": close,
+            "high": high,
+            "low": low,
+            "volume": volume,
+            "trade_date": trade_date
+        }
+        
         super().__init__(
             EventType.BAR,
             {
-                "symbol": symbol,
+                "stock_code": stock_code,
                 "bar_data": bar_data
             },
             timestamp or datetime.now()
         )
-        self.symbol = symbol
+        self.stock_code = stock_code
+        self.trade_date = trade_date
+        self.open = open
+        self.close = close
+        self.high = high
+        self.low = low
+        self.volume = volume
         self.bar_data = bar_data
 
 
-@dataclass
 class SignalEvent(Event):
     """交易信号事件"""
-    symbol: str
-    signal_type: str
-    strength: float
-    direction: str  # 'buy', 'sell', 'hold'
     
-    def __init__(self, symbol: str, signal_type: str, strength: float, 
+    def __init__(self, stock_code: str, signal_type: str, strength: float, 
                  direction: str, timestamp: datetime = None):
         super().__init__(
             EventType.SIGNAL,
             {
-                "symbol": symbol,
+                "stock_code": stock_code,
                 "signal_type": signal_type,
                 "strength": strength,
                 "direction": direction
             },
             timestamp or datetime.now()
         )
-        self.symbol = symbol
+        self.stock_code = stock_code
         self.signal_type = signal_type
         self.strength = strength
         self.direction = direction
 
 
-@dataclass
 class OrderEvent(Event):
     """订单事件"""
-    symbol: str
-    order_type: str  # 'market', 'limit', 'stop'
-    quantity: int
-    price: Optional[float] = None
-    direction: str = "buy"  # 'buy', 'sell'
     
-    def __init__(self, symbol: str, order_type: str, quantity: int, 
+    def __init__(self, stock_code: str, order_type: str, quantity: int, 
                  price: Optional[float] = None, direction: str = "buy", 
                  timestamp: datetime = None):
         super().__init__(
             EventType.ORDER,
             {
-                "symbol": symbol,
+                "stock_code": stock_code,
                 "order_type": order_type,
                 "quantity": quantity,
                 "price": price,
@@ -127,28 +127,22 @@ class OrderEvent(Event):
             },
             timestamp or datetime.now()
         )
-        self.symbol = symbol
+        self.stock_code = stock_code
         self.order_type = order_type
         self.quantity = quantity
         self.price = price
         self.direction = direction
 
 
-@dataclass
 class FillEvent(Event):
     """成交回报事件"""
-    symbol: str
-    quantity: int
-    price: float
-    direction: str
-    commission: float = 0.0
     
-    def __init__(self, symbol: str, quantity: int, price: float, 
+    def __init__(self, stock_code: str, quantity: int, price: float, 
                  direction: str, commission: float = 0.0, timestamp: datetime = None):
         super().__init__(
             EventType.FILL,
             {
-                "symbol": symbol,
+                "stock_code": stock_code,
                 "quantity": quantity,
                 "price": price,
                 "direction": direction,
@@ -156,18 +150,15 @@ class FillEvent(Event):
             },
             timestamp or datetime.now()
         )
-        self.symbol = symbol
+        self.stock_code = stock_code
         self.quantity = quantity
         self.price = price
         self.direction = direction
         self.commission = commission
 
 
-@dataclass
 class SectorSelectionEvent(Event):
     """板块选择事件"""
-    selected_sectors: list
-    sector_scores: Dict[str, float]
     
     def __init__(self, selected_sectors: list, sector_scores: Dict[str, float], 
                  timestamp: datetime = None):
@@ -183,11 +174,8 @@ class SectorSelectionEvent(Event):
         self.sector_scores = sector_scores
 
 
-@dataclass
 class StockSelectionEvent(Event):
     """个股选择事件"""
-    selected_stocks: list
-    stock_scores: Dict[str, float]
     
     def __init__(self, selected_stocks: list, stock_scores: Dict[str, float], 
                  timestamp: datetime = None):
