@@ -1,0 +1,29 @@
+# 量化交易系统 v2.0 依赖包
+# Python 3.11+
+
+# 核心数据处理与科学计算
+pandas>=2.0.0
+numpy>=1.24.0
+
+# 数据库交互
+sqlalchemy>=2.0.0
+
+# 数据源
+akshare>=1.10.0
+
+# 可视化
+streamlit>=1.28.0
+plotly>=5.15.0
+
+# 配置管理
+pyyaml>=6.0
+python-dotenv>=1.0.0
+
+# 日志
+loguru>=0.7.0
+
+# 日期时间处理
+python-dateutil>=2.8.0
+
+# 开发工具
+pytest>=7.0.0
