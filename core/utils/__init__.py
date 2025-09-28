@@ -6,11 +6,12 @@
 
 from .logger import Logger, setup_logger, get_logger
 from .helpers import DataHelper, StockCodeHelper, DateHelper
+from .jqdata_converter import JQDataConverter
 from .indicators import *
 
 __all__ = [
     'Logger', 'setup_logger', 'get_logger',
-    'DataHelper', 'StockCodeHelper', 'DateHelper',
+    'DataHelper', 'StockCodeHelper', 'DateHelper', 'JQDataConverter',
     # 原始指标函数
     'RD', 'RET', 'ABS', 'MAX', 'MIN', 'MA', 'REF', 'DIFF', 'STD', 'IF', 'SUM', 'HHV', 'LLV', 'EMA', 'SMA', 'AVEDEV', 'SLOPE',
     'COUNT', 'EVERY', 'EXIST', 'FILTER', 'BARSLAST', 'BARSLASTCOUNT', 'BARSSINCEN', 'CROSS', 'VALUEWHEN', 'BETWEEN', 'TOPRANGE', 'LOWRANGE',

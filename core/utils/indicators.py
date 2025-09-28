@@ -296,12 +296,12 @@ def zhibiao(df: pd.DataFrame) -> pd.DataFrame:
     result_df['DIF'], result_df['DEA'], result_df['MACD'] = MACD(
         close, SHORT=12, LONG=26, M=9)
 
-    # ATR指标 - 真实波动范围
-    result_df['ATR'], result_df['TR'] = ATR(close, high, low, N=14)
+    # # ATR指标 - 真实波动范围
+    # result_df['ATR'], result_df['TR'] = ATR(close, high, low, N=14)
 
-    #DMI指标
-    result_df['PDI'], result_df['MDI'], result_df['ADX'], result_df['ADXR'] = DMI(
-        close, high, low, M1=14, M2=6)
+    # #DMI指标
+    # result_df['PDI'], result_df['MDI'], result_df['ADX'], result_df['ADXR'] = DMI(
+    #     close, high, low, M1=14, M2=6)
 
         
     return result_df
