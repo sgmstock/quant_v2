@@ -658,14 +658,9 @@ def load_monthly_data_from_db(stock_code: str, start_date: str = None, end_date:
         # 执行查询 - 将text对象转换为字符串
         df = db_manager.execute_query(str(query), params)
         
-        # 确保日期格式正确 - 使用更宽松的日期解析
+        # 确保日期格式正确
         if not df.empty:
-            try:
-                df['trade_date'] = pd.to_datetime(df['trade_date'], errors='coerce').dt.date
-            except Exception as e:
-                print(f"日期转换警告: {e}")
-                # 如果转换失败，尝试其他格式
-                df['trade_date'] = pd.to_datetime(df['trade_date'], format='%Y-%m-%d', errors='coerce').dt.date
+            df['trade_date'] = pd.to_datetime(df['trade_date']).dt.date
         
         print(f"从数据库加载 {stock_code} 月线数据: {len(df)} 条记录")
         return df
@@ -1223,6 +1218,8 @@ def get_last_trade_date(today_date=None):
 
 
 # if __name__ == "__main__":
+#     ashare_df = get_price("600048.XSHG", end_date="20250929", count=2, frequency='1d')
+#     print(ashare_df)
 #     # 测试单只股票数据获取
 #     dd = db_manager.get_last_trade_date(today_date=None)
 

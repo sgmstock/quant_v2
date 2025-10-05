@@ -156,25 +156,50 @@ class DataUpdater:
             return
 
         logger.info("--- 开始增量更新周线和月线数据 ---")
+        
+        # 只更新周线数据，月线数据已经完整
         self._resample_and_update('k_weekly', 'W-FRI', start_date)
-        self._resample_and_update('k_monthly', 'M', start_date)
+        
+        # 检查月线数据是否需要更新
+        logger.info("检查月线数据状态...")
+        try:
+            # 获取最新的月线数据日期
+            latest_monthly = self.db_manager.get_latest_data_date('k_monthly')
+            if latest_monthly:
+                logger.info(f"月线数据最新日期: {latest_monthly}")
+                # 如果月线数据已经是最新的，跳过转换
+                if latest_monthly >= start_date:
+                    logger.info("月线数据已经是最新的，跳过月线转换。")
+                    return
+                else:
+                    logger.info("月线数据需要更新，开始转换...")
+                    self._resample_and_update('k_monthly', 'M', start_date)
+            else:
+                logger.info("没有找到月线数据，开始转换...")
+                self._resample_and_update('k_monthly', 'M', start_date)
+        except Exception as e:
+            logger.warning(f"检查月线数据状态失败: {e}，跳过月线转换。")
 
     def _resample_and_update(self, table_name, period_code, start_date):
-        """通用重采样和更新逻辑"""
+        """通用重采样和更新逻辑 - 最终修复版本"""
         try:
+            from sqlalchemy import text
+            
             # 确定重计算的真正起始点（周初或月初）
             start_dt = pd.to_datetime(start_date)
             if period_code == 'W-FRI':
-                # 找到该日期所在周的周一（因为周线按周五收盘，但需要从周一开始重算）
                 recalc_start = (start_dt - pd.to_timedelta(start_dt.weekday(), unit='d')).strftime('%Y-%m-%d')
-            else: # 月线
+            else: # 月线 ('M' or 'ME')
                 recalc_start = start_dt.strftime('%Y-%m-01')
 
             logger.info(f"为 '{table_name}' 表重计算自 {recalc_start} 以来的数据...")
 
-            # 只读取需要重计算的日线数据
-            query = f"SELECT * FROM k_daily WHERE trade_date >= '{recalc_start}'"
-            daily_df = pd.read_sql(query, self.db_manager.engine)
+            # [核心修正] 恢复为原始的、更稳定的数据加载方式
+            with self.db_manager.engine.connect() as conn:
+                query = text("SELECT * FROM k_daily WHERE trade_date >= :recalc_start")
+                result = conn.execute(query, {"recalc_start": recalc_start})
+                daily_df = pd.DataFrame(result.fetchall(), columns=result.keys())
+            
             if daily_df.empty:
                 logger.info(f"在 {recalc_start} 之后没有日线数据，跳过 {table_name} 更新。")
                 return
@@ -183,35 +208,37 @@ class DataUpdater:
             daily_df['trade_date'] = pd.to_datetime(daily_df['trade_date'])
             daily_df = daily_df.set_index('trade_date')
             
-            # 简化的周期转换：直接使用resample结果
+            # 修复 'M' 的 FutureWarning
+            resample_code = 'ME' if period_code == 'M' else period_code
+            
             agg_rules = {'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}
-            period_df = daily_df.groupby('stock_code').resample(period_code).agg(agg_rules)
+            period_df = daily_df.groupby('stock_code').resample(resample_code).agg(agg_rules)
             period_df.dropna(inplace=True)
             period_df.reset_index(inplace=True)
             period_df['trade_date'] = period_df['trade_date'].dt.strftime('%Y-%m-%d')
             
             if period_df.empty:
-                logger.warning(f"没有生成{period_code}数据")
+                logger.warning(f"没有生成 {resample_code} 数据")
                 return
 
-            # 增量更新：先删除，后追加
-            with self.db_manager.engine.connect() as conn:
-                from sqlalchemy import text
+            # 使用 engine.begin() 来管理事务，自动提交或回滚
+            with self.db_manager.engine.begin() as conn:
+                # 先删除旧数据
                 delete_query = text(f"DELETE FROM {table_name} WHERE trade_date >= :recalc_start")
                 result = conn.execute(delete_query, {"recalc_start": recalc_start})
                 logger.info(f"从 {table_name} 删除了 {result.rowcount} 条旧数据。")
 
-                period_df.to_sql(table_name, conn, if_exists='append', index=False)
-                # SQLAlchemy context manager automatically commits when exiting
-
-            logger.info(f"✅ 成功更新了 {len(period_df)} 条数据到 {table_name} 表。")
-            if period_code == 'W-FRI':
-                logger.info("周线数据转换完成（每周按周五收盘，不考虑节假日）")
+            # 使用您封装好的 DatabaseManager 保存新数据
+            success = self.db_manager.save_stock_data(period_df, table_name, conflict_resolution="replace")
+            if success:
+                logger.info(f"✅ 成功更新了 {len(period_df)} 条数据到 {table_name} 表。")
             else:
-                logger.info("月线数据转换完成（每月按月末收盘，不考虑节假日）")
+                logger.error(f"保存数据到 {table_name} 表失败")
             
         except Exception as e:
             logger.error(f"更新 {table_name} 表时失败: {e}")
+            import traceback
+            logger.error(f"详细错误信息: {traceback.format_exc()}")
 
     # --- 主流程 ---
     def run(self):
