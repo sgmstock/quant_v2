@@ -30,7 +30,7 @@ from core.execution.account import Account, Order
 # 板块信号分析
 from data_management.sector_signal_analyzer import SectorSignalAnalyzer
 # 仓位与资金管理
-from core.execution.portfolio_manager import get_buy_stocks_from_db, get_individual_stock_buy_signals, get_cx_stock_buy_decision
+from core.execution.portfolio_manager_new import get_buy_stocks_from_db, get_individual_stock_buy_signals, get_cx_stock_buy_decision
 # 个股技术指标分析
 from core.technical_analyzer.technical_analyzer import TechnicalAnalyzer
 from core.technical_analyzer.technical_analyzer import prepare_data_for_live
@@ -87,7 +87,7 @@ def push_redis(action,stock,amount):
 # =============================================================================
 # --- 交易时间点 ---
 # DAILY_ANALYSIS_TIMES = ["11:00", "14:40"]
-DAILY_ANALYSIS_TIMES = ["10:00", "10:39","11:00", "11:16", "13:30", "14:00", "14:30", "14:50"]
+DAILY_ANALYSIS_TIMES = ["10:05", "10:39","11:00", "11:16", "13:07", "14:00", "14:30", "14:50"]
 
 
 def is_trading_hours():
@@ -479,7 +479,17 @@ def run_daily_buy_analysis():
         logger.info(f"开始执行日线买入分析 @ {datetime.now().strftime('%H:%M:%S')}")
         print(f"\n{'='*30} 触发日线买入分析 @ {datetime.now().strftime('%H:%M:%S')} {'='*30}")
         
-        # 1. 确定分析日期和要操作的板块数据
+        # 1. 动态加载配置参数
+        try:
+            from config_select_position_100w import CSV_POOLS_CONFIG, get_csv_pool_config, validate_all_configs
+            logger.info("动态配置参数加载成功")
+            print("✓ 动态配置参数加载成功")
+        except Exception as e:
+            logger.error(f"加载配置参数失败: {e}")
+            print(f"❌ 加载配置参数失败: {e}")
+            return
+        
+        # 2. 确定分析日期和要操作的板块数据
         end_date = datetime.now().strftime('%Y-%m-%d')
         
         logger.info(f"分析日期: {end_date}")
@@ -520,13 +530,29 @@ def run_daily_buy_analysis():
         print(f"❌ 买入分析初始化失败: {e}")
         return
 
-    # 2. 对每个板块独立进行买入决策
+    # 3. 对每个板块独立进行买入决策
     for pool_name in pool_names:
         # 获取该板块的最新数据日期
         pool_latest_date = pool_latest_dates[pool_name]
         
         logger.info(f"开始处理板块: {pool_name} (使用数据日期: {pool_latest_date})")
         print(f"\n{'*'*25} 正在决策板块: {pool_name.upper()} (数据日期: {pool_latest_date}) {'*'*25}")
+
+        # 3.1 获取该板块的动态配置参数
+        pool_config = get_csv_pool_config(pool_name)
+        if not pool_config:
+            logger.warning(f"板块 {pool_name} 无配置参数，跳过")
+            print(f"✗ 板块 {pool_name} 无配置参数，跳过")
+            continue
+        
+        # 提取操作参数
+        sector_initial_cap = pool_config.get('sector_initial_cap', 0.12)
+        min_stocks = pool_config.get('min_stocks', 2)
+        max_stocks = pool_config.get('max_stocks', 4)
+        top_percentage = pool_config.get('top_percentage', 0.15)
+        
+        logger.info(f"板块 {pool_name} 配置参数: 仓位比例={sector_initial_cap*100:.1f}%, 股票数量={min_stocks}-{max_stocks}, 前百分比={top_percentage*100:.1f}%")
+        print(f"✓ 板块配置: 仓位比例={sector_initial_cap*100:.1f}%, 股票数量={min_stocks}-{max_stocks}, 前百分比={top_percentage*100:.1f}%")
 
         try:
             # --- 宏观分析：从数据库获取当前板块专属信号 ---
@@ -569,10 +595,18 @@ def run_daily_buy_analysis():
 
 
             # --- 仓位与资金分析 ---
-            # 从cangwei.py获取经过资金和仓位过滤后的买入建议
+            # 从cangwei.py获取经过资金和仓位过滤后的买入建议，传入动态配置参数
             logger.info("开始仓位与资金分析...")
             try:
-                buy_signals_from_cangwei = get_individual_stock_buy_signals(pool_name, pool_latest_date, account=ACCOUNT)
+                buy_signals_from_cangwei = get_individual_stock_buy_signals(
+                    pool_name=pool_name, 
+                    end_date=pool_latest_date, 
+                    sector_initial_cap=sector_initial_cap,
+                    min_stocks=min_stocks,
+                    max_stocks=max_stocks,
+                    top_percentage=top_percentage,
+                    account=ACCOUNT
+                )
                 logger.info(f"仓位分析完成，获得 {len(buy_signals_from_cangwei)} 个买入信号")
             except Exception as e:
                 logger.error(f"仓位分析失败: {e}")
