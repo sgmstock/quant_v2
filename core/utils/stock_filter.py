@@ -53,6 +53,7 @@ class StockXihua:
         self.gbj = []  # 高价股
         self.dbj = []  # 低价股
         self.dg = []   # 大高股（大市值且高价）
+        self.longtou = [] # 龙头股
         
         # 基本面特征分类结果
         self.gq = []   # 国企股
@@ -238,6 +239,11 @@ class StockXihua:
         
         # 大高股（大市值且高价）
         self.dg = df[(df['流通值'] > market_value_80) & (df['收盘价'] > price_80)]['code'].tolist()
+
+        # 龙头股（流通值0.7分位数和收盘价0.9分位数）
+        market_value_70 = df['流通值'].quantile(0.70)
+        price_90 = df['收盘价'].quantile(0.90)
+        self.longtou = df[(df['流通值'] > market_value_70) & (df['收盘价'] > price_90)]['code'].tolist()
         
         # 基本面特征分类
         # 国企股（国企字段为True）

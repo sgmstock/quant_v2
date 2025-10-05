@@ -1,8 +1,9 @@
 #保存所有很指标相关的函数。改名indicators
-#把MyTT有关的函数都放在这里
-  
-import numpy as np
+#把MyTT有关的函数都放在这里：
 import pandas as pd
+import talib as ta
+import numpy as np
+
 
 #------------------ 0级：核心工具函数 --------------------------------------------      
 def RD(N,D=3):   return np.round(N,D)        #四舍五入取3位小数 
@@ -279,9 +280,10 @@ def zhibiao(df: pd.DataFrame) -> pd.DataFrame:
     result_df['MA_60'] = MA(close, 60)
     
     # 成交量移动平均线系列
+    result_df['VOL_3'] = MA(volume, 3)
     result_df['VOL_5'] = MA(volume, 5)
-    result_df['VOL_7'] = MA(volume, 7)
-    result_df['VOL_26'] = MA(volume, 26)
+    # result_df['VOL_7'] = MA(volume, 7)
+    # result_df['VOL_26'] = MA(volume, 26)
     result_df['VOL_30'] = MA(volume, 30)
     
     # BIAS乖离率指标
@@ -303,18 +305,75 @@ def zhibiao(df: pd.DataFrame) -> pd.DataFrame:
     result_df['PDI'], result_df['MDI'], result_df['ADX'], result_df['ADXR'] = DMI(
         close, high, low, M1=14, M2=6)
 
+    # DMI_SPREAD = PDI - MDI (净多头动能)
+    result_df['DMI_SPREAD'] = result_df['PDI'] - result_df['MDI']
+    result_df['DMI_SPREAD_MA3'] = result_df['DMI_SPREAD'].rolling(window=3, min_periods=2).mean()
+
+    # BEARISH_SPREAD = MDI - PDI (净空头动能)
+    result_df['BEARISH_SPREAD'] = result_df['MDI'] - result_df['PDI']
+    result_df['BEARISH_SPREAD_MA3'] = result_df['BEARISH_SPREAD'].rolling(window=3, min_periods=2).mean()
+
+
     #BOLL指标
     result_df['UPPER'], result_df['MID'], result_df['LOWER'] = BOLL(
         close, N=20, P=2)
 
-    # #PSY指标
-    # result_df['PSY'], result_df['PSYMA'] = PSY(close, N=12, M=6)
+    # 1. 计算标准化的布林带宽
+    result_df['BOLL_WIDTH'] = (result_df['UPPER'] - result_df['LOWER']) / result_df['MID']
 
-    # #CCI指标
-    # result_df['CCI'] = CCI(close, high, low, N=14)
+    # 2. 计算带宽在过去N个周期（例如半年120天）的百分位排名
+    # rank(pct=True) 会返回一个0到1的值，代表当前值在窗口期内的排名高低
+    # 0.1代表比过去10%的时间都窄，1.0代表最宽
+    result_df['BOLL_WIDTH_PCT_20'] = result_df['BOLL_WIDTH'].rolling(window=20).apply(
+        lambda x: pd.Series(x).rank(pct=True).iloc[-1], raw=False
+    )
 
-    # #RSI指标
-    # result_df['RSI'] = RSI(close, N=24)
+    # --- OBV指标 (使用自定义函数) ---
+    result_df['OBV'] = OBV(close, volume)
+    result_df['OBV_MA30'] = result_df['OBV'].rolling(window=30, min_periods=20).mean()
 
-        
+    # --- MFI指标 (使用自定义函数) ---
+    result_df['MFI'] = MFI(high, low, close, volume, N=14)
+
+    # --- VR指标 (使用自定义函数) ---
+    result_df['VR'] = VR(close, volume, M1=24)
+
+    # --- RSI指标 (使用自定义函数) ---
+    result_df['RSI_24'] = RSI(close, N=24)
+    # except Exception as e:
+    #     print(f"RSI计算失败: {e}")
+    #     result_df['RSI_24'] = 50.0  # 默认中性值 
+
+
     return result_df
+
+if __name__ == "__main__":
+    # 添加项目根目录到系统路径
+    import sys
+    import os
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if project_root not in sys.path:
+        sys.path.append(project_root)
+    
+    from core.technical_analyzer.technical_analyzer import get_monthly_data_for_backtest, get_weekly_data_for_backtest, get_daily_data_for_backtest
+    stock_code = '002059'
+    date = '2025-09-03'
+    df_M = get_monthly_data_for_backtest(stock_code, date)
+    df_w = get_weekly_data_for_backtest(stock_code, date)
+    df_d = get_daily_data_for_backtest(stock_code, date)
+    
+    # 测试zhibiao函数
+    print("测试日线数据指标计算...")
+    df_d_with_indicators = zhibiao(df_d)
+    print(f"日线数据指标计算完成! 新增列数: {len(df_d_with_indicators.columns) - len(df_d.columns)}")
+    print(df_d_with_indicators.tail(3))
+    
+    print("\n测试周线数据指标计算...")
+    df_w_with_indicators = zhibiao(df_w)
+    print(f"周线数据指标计算完成! 新增列数: {len(df_w_with_indicators.columns) - len(df_w.columns)}")
+    print(df_w_with_indicators.tail(3))
+    
+    print("\n测试月线数据指标计算...")
+    df_M_with_indicators = zhibiao(df_M)
+    print(f"月线数据指标计算完成! 新增列数: {len(df_M_with_indicators.columns) - len(df_M.columns)}")
+    print(df_M_with_indicators.tail(3))
